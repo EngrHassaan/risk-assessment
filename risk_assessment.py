@@ -628,25 +628,110 @@ with tabs[4]:
         images = []
         if not st.session_state.pillar_avgs_df.empty:
             pa = st.session_state.pillar_avgs_df
-            # run a lightweight DEA + MC with small samples to provide content
             try:
-                dea_summary, peer_matrix, bottleneck_matrix, targets, pillar_avgs = mod.approx_dea_diagnostics(pa, samples=800, min_peer_lambda=0.05)
-                tables.append((dea_summary.round(6), "DEA summary (sample)"))
-                tables.append((peer_matrix.round(6), "Peer matrix (sample)"))
-                # capture plots
-                before = plt.get_fignums()
-                mod.plot_pbest(dea_summary["FrontierProb"], "DEA Frontier Prob (sample)")
-                mod.plot_dea_bottleneck_heatmap(bottleneck_matrix)
-                mod.plot_dea_peer_heatmap(peer_matrix)
-                mod.plot_dea_target_radars(pillar_avgs, targets)
-                mod.compute_dominance_matrix(pillar_avgs)
+            # --- Run DEA diagnostics (sample) ---
+                dea_summary, peer_matrix, bottleneck_matrix, targets = mod.approx_dea_diagnostics(
+                    pa, samples=800, min_peer_lambda=0.05
+                )
+                tables.append((dea_summary.round(6), "DEA Summary (sample)"))
+                tables.append((peer_matrix.round(6), "DEA Peer Matrix (sample)"))
+
+                # --- Capture each DEA chart individually ---
+
+                # 1️⃣ DEA Frontier Probability
+                fig1_before = plt.get_fignums()
+                mod.plot_pbest(dea_summary["FrontierProb"], "DEA Frontier Probability (sample)")
                 for num in plt.get_fignums():
-                    if num not in before:
+                    if num not in fig1_before:
                         fig = plt.figure(num)
-                        images.append((mpl_fig_to_png_bytes(fig), "DEA visuals"))
-            except Exception:
-                pass
-        return {"heading":"Validation", "text":"DEA diagnostics & sample visuals (if pillar averages exist)", "tables": tables, "images": images}
+                        images.append((mpl_fig_to_png_bytes(fig), "DEA Frontier Probability"))
+                        plt.close(fig)
+
+                # 2️⃣ DEA Bottleneck Heatmap
+                fig2_before = plt.get_fignums()
+                mod.plot_dea_bottleneck_heatmap(bottleneck_matrix)
+                for num in plt.get_fignums():
+                    if num not in fig2_before:
+                        fig = plt.figure(num)
+                        images.append((mpl_fig_to_png_bytes(fig), "DEA Bottleneck Heatmap"))
+                        plt.close(fig)
+
+                # 3️⃣ DEA Peer Heatmap
+                fig3_before = plt.get_fignums()
+                mod.plot_dea_peer_heatmap(peer_matrix)
+                for num in plt.get_fignums():
+                    if num not in fig3_before:
+                        fig = plt.figure(num)
+                        images.append((mpl_fig_to_png_bytes(fig), "DEA Peer Heatmap"))
+                        plt.close(fig)
+
+                # 4️⃣ DEA Target Radars
+                fig4_before = plt.get_fignums()
+                mod.plot_dea_target_radars(pa, targets)
+                for num in plt.get_fignums():
+                    if num not in fig4_before:
+                        fig = plt.figure(num)
+                        images.append((mpl_fig_to_png_bytes(fig), "DEA Target Radars"))
+                        plt.close(fig)
+
+                # --- Dominance Matrix ---
+                dom = mod.compute_dominance_matrix(pa)
+                tables.append((dom.round(6), "Dominance Matrix"))
+
+                # --- Monte-Carlo (quick summary for PDF) ---
+                try:
+                    Pbest, MeanRank, StdRank, RankDist = mod.run_monte_carlo_sensitivity(
+                        pa,
+                        st.session_state.last_weights
+                        if st.session_state.last_weights
+                        else {p: 100.0 / len(pa.index) for p in pa.index},
+                        st.session_state.last_methods
+                        if st.session_state.last_methods
+                        else ["WEIGHTED"],
+                        sims=500,
+                        weight_alpha=1.0,
+                        score_noise_sigma=0.03,
+                    )
+                    tables.append((Pbest.round(6), "Monte Carlo – P(Best)"))
+
+                    # P(Best) chart
+                    if "WEIGHTED" in Pbest.columns:
+                        fig = px.bar(
+                            Pbest.reset_index(),
+                            x="Tech",
+                            y="WEIGHTED",
+                            title="Monte Carlo P(Best) – WEIGHTED",
+                        )
+                        images.append((plotly_fig_to_png_bytes(fig), "Monte Carlo P(Best)"))
+
+                    # Rankogram
+                    if "WEIGHTED" in RankDist:
+                        rd = RankDist["WEIGHTED"]
+                        fig = go.Figure()
+                        for col in rd.columns:
+                            fig.add_trace(go.Bar(name=col, x=rd.index, y=rd[col]))
+                        fig.update_layout(barmode="stack", title="Monte Carlo Rankogram – WEIGHTED")
+                        images.append((plotly_fig_to_png_bytes(fig), "Monte Carlo Rankogram"))
+
+                except Exception as e:
+                    images.append(
+                        (
+                            mpl_fig_to_png_bytes(plt.figure()),
+                            f"Monte Carlo generation failed: {e}",
+                        )
+                    )
+
+            except Exception as e:
+                images.append(
+                    (mpl_fig_to_png_bytes(plt.figure()), f"DEA generation failed: {e}")
+                )
+
+        return {
+        "heading": "Validation",
+        "text": "DEA diagnostics and Monte Carlo sensitivity visuals (if pillar averages exist).",
+        "tables": tables,
+        "images": images,
+    }
 
     # Buttons to generate per-tab PDFs
     cols = st.columns(3)
