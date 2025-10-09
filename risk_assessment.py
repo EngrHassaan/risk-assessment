@@ -630,13 +630,16 @@ with tabs[4]:
             pa = st.session_state.pillar_avgs_df
             # run a lightweight DEA + MC with small samples to provide content
             try:
-                dea_summary, peer_matrix, bottleneck_matrix, targets = mod.approx_dea_diagnostics(pa, samples=500, min_peer_lambda=0.05)
+                dea_summary, peer_matrix, bottleneck_matrix, targets, pillar_avgs = mod.approx_dea_diagnostics(pa, samples=800, min_peer_lambda=0.05)
                 tables.append((dea_summary.round(6), "DEA summary (sample)"))
                 tables.append((peer_matrix.round(6), "Peer matrix (sample)"))
                 # capture plots
                 before = plt.get_fignums()
                 mod.plot_pbest(dea_summary["FrontierProb"], "DEA Frontier Prob (sample)")
                 mod.plot_dea_bottleneck_heatmap(bottleneck_matrix)
+                mod.plot_dea_peer_heatmap(peer_matrix)
+                mod.plot_dea_target_radars(pillar_avgs, targets)
+                mod.compute_dominance_matrix(pillar_avgs)
                 for num in plt.get_fignums():
                     if num not in before:
                         fig = plt.figure(num)
