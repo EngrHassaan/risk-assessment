@@ -380,7 +380,7 @@ with tabs[1]:
                 df_wide = pillar_avgs.T  # alternatives x pillars
                 fig_par = px.parallel_coordinates(df_wide.reset_index(), labels={c: c for c in df_wide.columns}, title="Parallel Coordinates (Pillar Profiles)")
                 fig_par.update_layout(
-                margin=dict(l=50, r=80, t=100, b=80),
+                margin=dict(l=50, r=50, t=100, b=80),
                 title=dict(y=0.95, x=0.5, xanchor='center', yanchor='top'),
                 font=dict(size=13, color="black")
                 )
