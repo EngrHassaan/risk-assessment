@@ -389,6 +389,7 @@ with tabs[1]:
             st.download_button("Download pillar averages (CSV)", data=csv_b, file_name="pillar_averages.csv", mime="text/csv")
 
 # ----- Scenario Analysis Tab -----
+# ----- Scenario Analysis Tab -----
 with tabs[2]:
     st.header("Scenario Analysis (MCDA)")
     if st.session_state.pillar_avgs_df.empty:
@@ -398,19 +399,36 @@ with tabs[2]:
         st.write("Pillar Averages:")
         st.dataframe(pillar_avgs.round(4))
 
-        st.subheader("Pillar weights (sum to 100%)")
+        st.subheader("Pillar Weights (sum to 100%)")
         weight_cols = st.columns(len(pillar_avgs.index))
         weights = {}
         for i, p in enumerate(pillar_avgs.index):
             with weight_cols[i]:
-                w = st.number_input(f"{p} (%)", min_value=0.0, max_value=100.0, value=round(100.0/len(pillar_avgs.index), 2), key=f"w_{p}")
+                w = st.number_input(
+                    f"{p} (%)",
+                    min_value=0.0,
+                    max_value=100.0,
+                    value=round(100.0 / len(pillar_avgs.index), 2),
+                    key=f"w_{p}"
+                )
                 weights[p] = float(w)
+
         total = sum(weights.values())
         if abs(total - 100.0) > 1e-6:
-            st.warning(f"Weights sum to {total:.2f}%. They must sum to 100% to run MCDA.")
+            st.warning(f"Weights sum to {total:.2f}%. They must sum to 100%.")
+            st.stop()
 
-        methods_selected = st.multiselect("Select methods", options=["WEIGHTED","WPM","RANK","TOPSIS","VIKOR","EDAS","MAUT","PCA"], default=["WEIGHTED"])
-        norm_flag = st.checkbox("Normalize outputs to 0–10 for display", value=True)
+        methods_selected = st.multiselect(
+            "Select MCDA Methods",
+            options=["WEIGHTED", "WPM", "RANK", "TOPSIS", "VIKOR", "EDAS", "MAUT", "PCA"],
+            default=["WEIGHTED"]
+        )
+        norm_flag = st.checkbox("Normalize outputs to 0–10 scale", value=True)
+
+        # Ensure scenario history
+        if "scenario_results" not in st.session_state:
+            st.session_state.scenario_results = {}
+
         if st.button("Run scenarios"):
             per_method = {}
             if "WEIGHTED" in methods_selected:
@@ -432,28 +450,72 @@ with tabs[2]:
 
             scenario_df = pd.DataFrame(per_method)
             scenario_df.index.name = "Alternative"
+
+            # optional normalization
             if norm_flag:
-                scaled_cols = {col: mod._scale_series_by_method(scenario_df[col], col) for col in scenario_df.columns}
+                scaled_cols = {
+                    col: mod._scale_series_by_method(scenario_df[col], col)
+                    for col in scenario_df.columns
+                }
                 scenario_df_scaled = pd.DataFrame(scaled_cols, index=scenario_df.index)
             else:
                 scenario_df_scaled = scenario_df.copy()
 
-            st.write("Scenario results (scaled)" if norm_flag else "Scenario results (raw)")
-            st.dataframe(scenario_df_scaled.round(4))
+            # Save new scenario in session
+            scenario_name = f"Scenario {len(st.session_state.scenario_results) + 1}"
+            st.session_state.scenario_results[scenario_name] = {
+                "weights": weights,
+                "methods": methods_selected,
+                "results": scenario_df_scaled,
+            }
 
-            # Plotly bar chart for first few methods
-            plot_df = scenario_df_scaled.reset_index().melt(id_vars="Alternative", var_name="Method", value_name="Score")
-            fig = px.bar(plot_df, x="Alternative", y="Score", color="Method", barmode="group", title="Scenario – Methods Comparison")
-            st.plotly_chart(fig, use_container_width=True)
-
-            # store last settings
             st.session_state.last_weights = weights
             st.session_state.last_methods = methods_selected
-            # downloads
+
+        # Display all stored scenarios
+        if st.session_state.scenario_results:
+            st.subheader("Stored Scenarios")
+            for name, sdata in st.session_state.scenario_results.items():
+                st.markdown(f"**{name}** — Methods: {', '.join(sdata['methods'])}")
+                st.dataframe(sdata["results"].round(4))
+
+            # Plot aggregated comparison
+            try:
+                all_plot_data = []
+                for name, sdata in st.session_state.scenario_results.items():
+                    df = sdata["results"].copy()
+                    df["Scenario"] = name
+                    all_plot_data.append(df.reset_index().melt(
+                        id_vars=["Alternative", "Scenario"],
+                        var_name="Method",
+                        value_name="Score"
+                    ))
+                plot_df = pd.concat(all_plot_data, ignore_index=True)
+                fig = px.bar(
+                    plot_df,
+                    x="Alternative",
+                    y="Score",
+                    color="Method",
+                    barmode="group",
+                    facet_row="Scenario",
+                    title="Scenario Comparisons by Method"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            except Exception as e:
+                st.error(f"Plot generation failed: {e}")
+
+            # CSV download of last scenario
+            last_key = list(st.session_state.scenario_results.keys())[-1]
+            last_df = st.session_state.scenario_results[last_key]["results"]
             csv_b = io.BytesIO()
-            scenario_df_scaled.to_csv(csv_b)
+            last_df.to_csv(csv_b)
             csv_b.seek(0)
-            st.download_button("Download scenario results (CSV)", data=csv_b, file_name="scenario_results.csv", mime="text/csv")
+            st.download_button(
+                "Download latest scenario (CSV)",
+                data=csv_b,
+                file_name=f"{last_key.replace(' ','_')}.csv",
+                mime="text/csv"
+            )
 
 # ----- Validation Tab -----
 with tabs[3]:

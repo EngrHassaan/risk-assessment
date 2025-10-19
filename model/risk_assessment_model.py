@@ -295,7 +295,7 @@ def plot_risk_views(df: pd.DataFrame) -> None:
     ax.set_ylim(y_min, y_max)
     ax.set_xlabel("Probability (Likelihood)")
     ax.set_ylabel("Severity (Impact)")
-    ax.set_title("Risk Bubble Chart – Likelihood × Impact")
+    ax.set_title("Materiality Assessment Diagram – Likelihood × Impact")
     ax.grid(False)
     plt.tight_layout()
     plt.show()
