@@ -379,6 +379,11 @@ with tabs[1]:
                 df_plotly = pillar_avgs.reset_index().melt(id_vars="Pillar", var_name="Tech", value_name="Score")
                 df_wide = pillar_avgs.T  # alternatives x pillars
                 fig_par = px.parallel_coordinates(df_wide.reset_index(), labels={c: c for c in df_wide.columns}, title="Parallel Coordinates (Pillar Profiles)")
+                fig_par.update_layout(
+                margin=dict(l=60, r=80, t=100, b=80),
+                title=dict(y=0.95, x=0.5, xanchor='center', yanchor='top'),
+                font=dict(size=13, color="black")
+                )
                 st.plotly_chart(fig_par, use_container_width=True)
             except Exception:
                 pass
