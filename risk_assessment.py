@@ -184,12 +184,12 @@ if st.sidebar.button("Load example dataset"):
     # build small example using default pillars and two techs
     pillars = dict(mod.DEFAULT_ESGFP)
     techs = {
-        "Tech A": {f"{p}:{sub}": round(5.0 * (1.0 + 0.25*(i%3)), 3) for i, (p, subs) in enumerate(pillars.items()) for sub in subs},
-        "Tech B": {f"{p}:{sub}": round(6.5 * (1.0 + 0.1*(i%2)), 3) for i, (p, subs) in enumerate(pillars.items()) for sub in subs},
+        "Process Design A": {f"{p}:{sub}": round(5.0 * (1.0 + 0.25*(i%3)), 3) for i, (p, subs) in enumerate(pillars.items()) for sub in subs},
+        "Process Design B": {f"{p}:{sub}": round(6.5 * (1.0 + 0.1*(i%2)), 3) for i, (p, subs) in enumerate(pillars.items()) for sub in subs},
     }
     st.session_state.pillars = pillars
     st.session_state.scores_by_tech = techs
-    st.success("Example dataset loaded into session (two sample technologies).")
+    st.success("Example dataset loaded into session (two sample process designs).")
 
 # Example CSV template generation (download)
 def make_example_csv_bytes(pillars: Dict[str, List[str]]) -> bytes:
@@ -197,7 +197,7 @@ def make_example_csv_bytes(pillars: Dict[str, List[str]]) -> bytes:
     for p, subs in pillars.items():
         for sub in subs:
             cols.append(f"{p}:{sub}")
-    df = pd.DataFrame(columns=["Tech"] + cols)
+    df = pd.DataFrame(columns=["Process Design"] + cols)
     # make two example rows
     row1 = ["Tech A"] + [5.0 for _ in cols]
     row2 = ["Tech B"] + [6.0 for _ in cols]
@@ -241,7 +241,7 @@ with tabs[0]:
             st.dataframe(df_r.round(4))
             if st.button("Clear risks"):
                 st.session_state.risks = []
-                st.experimental_rerun()
+                st.session_state._do_rerun = True
         else:
             st.info("No risks added yet.")
     with col_r:
@@ -287,10 +287,10 @@ with tabs[1]:
             st.markdown(f"**{p}** — {', '.join(subs)}")
 
         st.write("---")
-        st.subheader("Add Technology & Scores")
-        with st.expander("Manual add technology"):
+        st.subheader("Add Process Design & Scores")
+        with st.expander("Manual add process design"):
             with st.form("add_tech_form", clear_on_submit=True):
-                tech_name = st.text_input("Technology name", f"Technology {len(st.session_state.scores_by_tech)+1}")
+                tech_name = st.text_input("Process Design name", f"Process Design {len(st.session_state.scores_by_tech)+1}")
                 inputs = {}
                 for p, subs in st.session_state.pillars.items():
                     st.markdown(f"**{p}**")
@@ -299,7 +299,7 @@ with tabs[1]:
                         base = st.number_input(f"{p} → {sub} base (1–9)", min_value=1.0, max_value=9.0, value=5.0, key=f"{tech_name}_{key}")
                         exposure = st.slider(f"Exposure {key}", min_value=0.0, max_value=1.0, value=0.0, key=f"exp_{tech_name}_{key}")
                         inputs[key] = round(base * (1.0 + exposure), 4)
-                added = st.form_submit_button("Add Technology")
+                added = st.form_submit_button("Add Process Design")
                 if added:
                     label = tech_name
                     k = 2
@@ -334,19 +334,19 @@ with tabs[1]:
                 st.error(f"CSV read error: {e}")
 
         st.write("---")
-        st.subheader("Existing technologies")
+        st.subheader("Existing process designs")
         if st.session_state.scores_by_tech:
             st.dataframe(pd.DataFrame(st.session_state.scores_by_tech).round(4))
-            if st.button("Clear technologies"):
+            if st.button("Clear process designs"):
                 st.session_state.scores_by_tech = {}
-                st.experimental_rerun()
+                st.session_state._do_rerun = True
         else:
-            st.info("No technologies in session. Add manually or upload CSV or load example dataset.")
+            st.info("No process designs in session. Add manually or upload CSV or load example dataset.")
 
     with right:
         st.subheader("Visualize & Compute Pillar Averages")
         if not st.session_state.scores_by_tech:
-            st.info("Add technologies first.")
+            st.info("Add process designs first.")
         else:
             pillar_avgs = mod.pillar_averages_multi(st.session_state.scores_by_tech, st.session_state.pillars)
             st.session_state.pillar_avgs_df = pillar_avgs.copy()
@@ -659,7 +659,7 @@ with tabs[4]:
                 if num not in before:
                     fig = plt.figure(num)
                     images.append((mpl_fig_to_png_bytes(fig), "Pillar visuals"))
-        return {"heading":"ESGFP Scoring", "text":"Technologies, scores, and pillar averages", "tables": tables, "images": images}
+        return {"heading":"ESGFP Scoring", "text":"Process designs, scores, and pillar averages", "tables": tables, "images": images}
 
     def collect_scenario_section():
         tables = []
@@ -841,3 +841,6 @@ with tabs[4]:
             make_download_button_bytes(pdf_bytes, fname, f"Download Full Report PDF ({fname})")
 
 st.info("Tip: Use 'Export Reports' to create PDFs of the current session. The files are generated dynamically and include charts and tables present in the session.")
+if st.session_state.get("_do_rerun", False):
+    st.session_state._do_rerun = False
+    st.rerun()
